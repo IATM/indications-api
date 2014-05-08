@@ -1,0 +1,680 @@
+package com.iatm.indications.api.beans
+
+global Integer childAge;
+
+// Claustrofobia assert sedation
+rule "ClaustrofobiaSedacion" 
+	when
+        $p : Patient(claustrophobia)
+        $s : Study(!sedation && modality == "MR")
+        $o : IndicationsOutput(!getRulesMatched().contains("ClaustrofobiaSedacion"))
+    then
+    	System.out.println("Rule matched:" + drools.getRule().getName());
+    	modify($o) {
+    		getRulesMatched().add(drools.getRule().getName());
+    	}
+    	modify($s) {
+    		setSedation(true);
+    	}
+end
+
+// 1 Esto deberia ser un OR
+rule "HorariosNoProgramacion" 
+	when
+        $p : Patient(hospitalized && age < childAge)
+        $s : Study(sedation)
+        $o : IndicationsOutput()
+    then
+    	System.out.println("Rule matched:" + drools.getRule().getName());
+    	$o.addScheduleIndication(new Indication("schedule", "No programar citas de pacientes hospitalizados, sedacion o ninos a las horas: 6:30am, 1:00pm y 6:00 o 9:00pm en las sedes"));
+end
+
+// 2 Falta para que estudios aplica
+rule "Infiltrado" 
+	when
+        $p : Patient(infiltration)
+        $o : IndicationsOutput()
+    then
+    	System.out.println("Rule matched:" + drools.getRule().getName());
+    	$o.addScheduleIndication(new Indication("schedule", "Programar cita 8 dias despues (paciente con infiltracion reciente)"));
+end
+
+// 4
+rule "Brackets" 
+	when
+        $p : Patient(brackets)
+        $s : Study(modality == "MR" && bodypart == "Head")
+        $o : IndicationsOutput()
+    then
+    	System.out.println("Rule matched:" + drools.getRule().getName());
+    	$o.addScheduleIndication(new Indication("schedule", "Citar al paciente para que venga a realizarse una prueba de artificios en RM, debido a los brackets"));
+end
+
+// 5
+rule "PeriodoMenstrual" 
+	when
+        $p : Patient(sex == "female")
+        $s : Study(code == "883102.5" || code == "883351")
+        $o : IndicationsOutput()
+    then
+    	System.out.println("Rule matched:" + drools.getRule().getName());
+    	$o.addScheduleIndication(new Indication("schedule", "Preguntar la fecha de la ultima menstruacion. Asignar cita al iniciar la segunda semana del periodo mestrual"));
+end
+
+// 9, 10, 11, 12 Cambiar por codigo de funcional
+rule "Funcional" 
+	when
+        $s : Study(modality == "MR" && bodypart == "Head" && name == "funcional")
+        $o : IndicationsOutput()
+    then
+    	System.out.println("Rule matched:" + drools.getRule().getName());
+    	$o.addScheduleIndication(new Indication("schedule", "Se debe coordinar la cita de RM Funcional con personal de investigacion al igual que el medico radiologo"));
+    	$o.addScheduleIndication(new Indication("schedule", "Asignar 1 h y 30 en los equipos 2 y preferiblemente el 3"));
+    	$o.addScheduleIndication(new Indication("schedule", "Solicitarle al paciente que traiga lo antes posible los examenes anteriores e historia clinica antes de la cita"));
+    	$o.addScheduleIndication(new Indication("schedule", "Si el paciente no puede venir 1h y 30 antes, debe venir para entrevista con el grupo de investigacion el dia anterior"));
+end
+
+// 13
+rule "CisternoRM" 
+	when
+        $s : Study(code == "883101.38")
+        $o : IndicationsOutput()
+    then
+    	System.out.println("Rule matched:" + drools.getRule().getName());
+    	$o.addScheduleIndication(new Indication("schedule", "Se debee separar 30 min, se ingresa RM sencilla 30-45 min y se separa nueva/  45 min para continuar con el examen"));
+end
+
+// 14
+rule "AnestesiaCardiaca"
+	when
+		$p : Patient(age < 10)
+        $s : Study(modality == "MR" && bodypart == "Heart")
+        $o : IndicationsOutput(!getRulesMatched().contains("AnestesiaCardiaca"))
+    then
+    	System.out.println("Rule matched:" + drools.getRule().getName());
+    	$o.addScheduleIndication(new Indication("schedule", "Requiere anestesiologo (el paciente tiene " + $p.getAge() + " anos) y viene para RM cardiaca"));
+    	modify($o) {
+    		getRulesMatched().add(drools.getRule().getName());
+    	}
+    	modify($s) {
+    		setAnesthesia(true),
+    		setSedation(false);
+    	}
+end
+
+// 19
+rule "ProstataBiopsia" 
+	when
+        $s : Study(bodypart == "Prostate")
+        $o : IndicationsOutput()
+    then
+    	System.out.println("Rule matched:" + drools.getRule().getName());
+    	$o.addScheduleIndication(new Indication("schedule", "Se le ha realizado biopsia de prostata? Debe haberse realizado minimo hace 6 (seis) semanas"));
+end
+
+// 20
+rule  "Equipo3"
+	when
+		$s : Study(code == "883101.11" || code=="883101.39" || code =="883102" || code=="883440.1" || code =="883512.23")
+	    $o : IndicationsOutput()
+	then
+	     System.out.println("Rule matched:" + drools.getRule().getName());
+	     $o.addScheduleIndication(new Indication("schedule", "Solo se puede asignar en el equipo 03"));
+end
+	     
+// 21 TODO especificar
+rule "ProstataEspectro"
+     when
+         $s : Study(bodypart ==  "Prostate" && modality == "MR")
+	     $o : IndicationsOutput()
+	 then
+	     System.out.println("Rule matched:" + drools.getRule().getName());
+	     $o.addScheduleIndication(new Indication("schedule", "Con espectroscopia? adicionar 30 minutos al tiempo de examen"));
+end
+
+// 35 Edad assert anestesia
+rule "EdadAnestesia"
+	when
+		$p : Patient(age > 70)
+        $s : Study(sedation)
+        $o : IndicationsOutput(!getRulesMatched().contains("EdadAnestesia"))
+    then
+    	System.out.println("Rule matched:" + drools.getRule().getName());
+    	$o.addScheduleIndication(new Indication("schedule", "Debe ser con sedacion asistida por anestesiologo. (el paciente tiene " + $p.getAge() + " anos)"));
+    	modify($o) {
+    		getRulesMatched().add(drools.getRule().getName());
+    	}
+    	modify($s) {
+    		setAnesthesia(true),
+    		setSedation(false);
+    	}
+end 
+    
+// 38 
+rule "MasAnticipacion"
+    when
+         $s : Study(code == "883101.39" || code == "883401.8")
+         $o : IndicationsOutput()  
+	then
+	     System.out.println("Rule matched:" + drools.getRule().getName());
+	     $o.addScheduleIndication(new Indication("schedule", "Citar el paciente con 1h Y 30 min de anterioridad"));
+end
+
+// 39 Assert anestesia?	    
+rule "UroRMFuncional"  
+	when
+        $s : Study(code == "883401.8")
+        $o : IndicationsOutput(!getRulesMatched().contains("UroRMFuncional"))
+    then
+    	System.out.println("Rule matched:" + drools.getRule().getName());
+    	$o.addScheduleIndication(new Indication("schedule", "Siempre coordinado con anestesia"));
+    	modify($o) {
+    		getRulesMatched().add(drools.getRule().getName());
+    	}
+    	modify($s) {
+    		setAnesthesia(true),
+    		setSedation(false);
+    	}
+end
+
+// 40 Muy general, hay un estudio con LCR pero el TOF??
+rule "LCRTOF"
+	when 
+	   $s : Study(bodypart == "Head" && modality == "MR")
+	   $o : IndicationsOutput()     
+	then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addScheduleIndication(new Indication("tiempo","Liquido Cefaloraquideo o tiempo de vuelo? Adicionar 15 min al examen"));
+end
+
+// 44 Todos los contrastados? Por que?	
+rule "ContrastePrevio"   
+     when
+       $p : Patient(previous_contrast)
+       $s : Study(contrast) 
+	   $o : IndicationsOutput()     
+	 then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addScheduleIndication(new Indication("schedule","Le han hecho examenes con Bario o medios de contraste en los ultimos 10 dias? Asignar cita despues de 10 dias"));
+end
+
+// 50
+rule "ProteccionRenalAnticipacion"   
+	  when
+	    $s : Study(renal_protection) 
+	    $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addScheduleIndication(new Indication("schedule", "Citar 2 horas antes para proteccion renal"));
+end
+
+// 25
+rule "Alergias"  
+     when
+       $p : Patient(allergies)
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addScheduleIndication(new Indication("schedule", "Debe consultarse con la enfermera para entregar protocolo de alergias. (seguir instructivo)"));	   
+end       
+    
+// 37
+rule "Contagioso"
+     when
+       $p : Patient(contagious)
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addScheduleIndication(new Indication("schedule", "Verificar si el paciente esta en algun tipo de aislamiento de contagio. Adicionar 15 min al examen"));	   
+end      
+
+// 79
+ 
+rule "TACAbdomen"
+     when
+       $s : Study(modality=="CT" && bodypart == "Abdomen")
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addScheduleIndication(new Indication("schedule", "Se debe citar el paciente 1 hora antes"));	   
+end         
+
+// 82, 83  AngioTAC Coronarias
+     
+ rule "AngioTACCoronarias"
+     when
+       $s : Study(code == "879301.6")
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addScheduleIndication(new Indication("schedule", "Si toma viagra (sildenafil) se debe informar al medico radiologo"));	   
+end     
+
+// 43, 51, 52, 53 56 Al fin un mes o dos meses?
+rule "TACContraste"
+     when
+       $s : Study(modality=="CT" && contrast)
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addScheduleIndication(new Indication("creatinina", "Solicitar creatinina serica (menor de 1 mes). Se debe informar a enfermeria"));	   
+	   $o.addScheduleIndication(new Indication("schedule", "Solicitar el peso, talla y edad. Se debe informar a enfermeria para calcular la TFG"));
+end   
+
+##################################### Preparations rules #####################################
+
+// 3 TODO: listado de codigos de artros? Regex?
+rule "Anticoagulado"
+     when
+       $p : Patient(anticoagulants)
+       $s : Study(code == "Directa")
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addPatientIndication(new Indication("anticoagulantes", "Debe suspender anti-coagulantes 5 dias antes de la RM y consultar con el medico tratante si autoriza su suspension"));	   
+end  
+
+// 6
+rule "Maquillaje"
+     when
+       $p : Patient(sex == "female")
+       $s : Study(modality == 'MR' && bodypart == "Head")
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addPatientIndication(new Indication("maquillaje", "No debe aplicarse maquillaje"));	   
+end   
+
+// 7
+rule "Enema"
+     when
+       $s : Study(modality == 'MR' && bodypart == "Pelvis")
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addPatientIndication(new Indication("enema", "Debe realizarse un enema 2 horas antes del examen"));	   
+end
+      
+// 8
+rule "RenalCreatinina"
+     when
+       $p : Patient(renal)
+       $s : Study(contrast)
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addPatientIndication(new Indication("creatinina", "Debe traer resultado de creatinina en sangre (reciente)"));	   
+end   
+     
+rule "QuimioCreatinina"
+     when
+       $p : Patient(chemo)
+       $s : Study(contrast)
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addPatientIndication(new Indication("creatinina", "Debe traer resultado de creatinina en sangre (reciente)"));	   
+end   
+
+rule "RadioCreatinina"
+     when
+       $p : Patient(radio)
+       $s : Study(contrast)
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addPatientIndication(new Indication("creatinina", "Debe traer resultado de creatinina en sangre (reciente)"));	   
+end   
+ 	  	      
+	     
+rule "EdadCreatinina"
+     when
+       $p : Patient(age > 60)
+       $s : Study(contrast)
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addPatientIndication(new Indication("creatinina", "Debe traer resultado de creatinina en sangre (reciente)"));	   
+end   
+	     
+rule "DiabetesCreatinina"
+     when
+       $p : Patient(diabetes)
+       $s : Study(contrast)
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addPatientIndication(new Indication("creatinina", "Debe traer resultado de creatinina en sangre (reciente)"));	   
+end 	   
+
+// 15 TODO. Very general
+
+// 17	
+rule "AbdomenAyuno"
+     when
+       $s : Study(bodypart == "Abdomen")
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addPatientIndication(new Indication("ayuno", "Debe venir con 4 horas de ayuno"));	   
+end 	   
+        
+// 18
+ rule "SedacionAcompanante"
+     when
+       $s : Study(sedation)
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addPatientIndication(new Indication("acompanante", "Debe traer un acompanante"));	   
+end        
+
+rule "NoConducir"
+     when
+       $s : Study(sedation)
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addPatientIndication(new Indication("conducir", "No debe venir conduciendo"));	   
+end        
+
+// 22 Pendiente
+// 23 Rm Cardiaca de Perfusion Estres con Dipiridamol Falta poder especificarla en los estudios
+// 24 Las dos ultimas citas no deben ser con sedacion. Rule de agendamiento
+// 26 Muy general, si hay excepciones se especifican en otras reglas
+// 29 Muy general, si hay excepciones se especifican en otras reglas
+// 30 No es muy clara, segun edad? que edad? para que estudios? si viene programado con sedación? o si vienen no programado?
+// 31 Muy general, si hay excepciones se especifican en otras reglas
+// 32
+rule "ContrasteAyuno"
+     when
+       $p : Patient(!diabetes)
+       $s : Study(contrast)
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addPatientIndication(new Indication("ayuno", "Debe venir con 6 horas de ayuno"));	   
+end 
+rule "SedacionAyuno"
+     when
+       $p : Patient(!diabetes)
+       $s : Study(sedation)
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addPatientIndication(new Indication("ayuno", "Debe venir con 6 horas de ayuno"));	   
+end 
+
+rule "AnestesiaAyuno"
+     when
+       $p : Patient(!diabetes)
+       $s : Study(anesthesia)
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addPatientIndication(new Indication("ayuno", "Debe venir con 6 horas de ayuno"));	   
+end 
+
+// 33
+rule "ContrasteAyunoDiabetes"
+     when
+       $p : Patient(diabetes)
+       $s : Study(contrast)
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addPatientIndication(new Indication("ayuno", "Debe venir con 4 horas de ayuno"));	   
+	   $o.addPatientIndication(new Indication("dieta", "Antes del ayuno debe consumir alimentos livianos"));	   
+end 
+
+// 34 Por que? Reevaluar
+// 36 No hay estudios especificados con tractografia? deberian haber? o se usa como modificador?
+// 41
+rule "RMFetal"
+     when
+       $s : Study(code == "883401.7")
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addPatientIndication(new Indication("autorizacion", "Debe traer autorizacion del medico ginecologo tratante para realizarse el estudio"));	   
+end 
+
+// 42
+rule "DiabetesMetformina"
+     when
+       $p : Patient(metformin)
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addPatientIndication(new Indication("metformina", "Debe suspender la metformina (glibenclamida) 24 horas antes del examen y 48 horas posteriores al examen"));	   
+end 
+
+// 43, 51, 52, 53 56 Al fin un mes o dos meses?
+rule "TACContraste_P"
+     when
+       $s : Study(modality=="CT" && contrast)
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addPatientIndication(new Indication("ayuno", "Debe venir con ayuno de 6 horas"));	   
+	   $o.addPatientIndication(new Indication("medicamentos", "No debe suspender medicamentos orales"));	   
+	   $o.addPatientIndication(new Indication("acompanante", "Debe asistir con un acompanante"));	   
+end
+
+// 45 Muy general
+// 46 , 54 Diabetes
+rule "Diabetes"
+     when
+       $p : Patient(diabetes)
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addPatientIndication(new Indication("insulina", "Debe aplicarse la insulina antes del procedimiento, y debe traer los medicamentos para ser aplicados en nuestra sede"));	   
+	   $o.addPatientIndication(new Indication("ayuno", "Debe venir con 4 horas de ayuno"));	   
+end
+
+// 47
+rule "Embarazo"
+     when
+       $p : Patient(sex == "F" && age > 14)
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addPatientIndication(new Indication("embarazo", "Asegurese de que no se encuentre en embarazo"));	   
+end
+
+// 48
+rule "DiscapacidadMentalAcompanante"
+     when
+       $p : Patient(mental_disc)
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addPatientIndication(new Indication("llegada", "Debe presentarse 30 min antes de la cita"));	   
+	   $o.addPatientIndication(new Indication("acompanante", "Debe presentarse con 1 acompanante adulto responsable que pueda autorizar el procedimiento"));	   
+end
+
+
+rule "EdadAcompanante"
+     when
+       $p : Patient(age < childAge)
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addPatientIndication(new Indication("hora_llegada", "Debe presentarse 30 min antes de la cita"));	   
+	   $o.addPatientIndication(new Indication("acompanante", "Debe presentarse con 1 acompanante adulto responsable que pueda autorizar el procedimiento"));	   
+end
+
+// 49
+rule "AyunoTrasnocho"
+     when
+       $p : Patient(age < childAge)
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addPatientIndication(new Indication("ayuno", "Debe venir con 4 horas de ayuno"));	   
+	   $o.addPatientIndication(new Indication("trasnocho", "Debe venir trasnochado (ya que si requiere contraste o sedacion se le pueda suministrar)"));
+end
+
+
+// 55 Pedir Talla, peso y Cr. para calcular GFR? Sobra?
+// 57 Parece que la regla de 15 min deberia ser para todos los TAC y estudios de Cardio, TODO poner los de Cardio...como
+rule "TACAnticipacion"
+     when
+       $s : Study(modality == "CT")
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addPatientIndication(new Indication("hora_llegada", "Debe llegar 15 minutos antes de su hora reservada para la realizacion de tramites administrativos"));	   
+end
+
+// 59 Deberia ser general? por que a ciertos estudios?
+rule "MedicamentosEscritos"
+     when
+       $s : Study(code == "881234.5" || code == "896100" )
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addPatientIndication(new Indication("medicamentos", "Si esta tomando medicamentos el dia del examen debe llevarlos escritos"));	   
+end
+
+// 60 General? no aplicaria para todos?
+// 61
+rule "NoJoyas"
+     when
+       $s : Study(code == "884103" || code == "894102" || code == "896100")
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addPatientIndication(new Indication("joyas", "Debe acudir sin joyas, ya que en el momento del examen no podra tenerlas consigo"));	   
+end
+
+// 62
+rule "RopaComoda"
+     when
+       $s : Study(code == "881234.1" || code == "881234.2" || code == "881234.5" || code == "881234.6" || code == "895001")
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addPatientIndication(new Indication("ropa", "Debe presentarse con ropa comoda (camisa de botones en la parte de adelante)"));	   
+end
+
+// 63 Deberia ser general? aplica para todo a menos que haya excepciones
+// 64 Deberia ser general? aplica para todo a menos que haya excepciones
+// 65 Todas las de Cardiologia?
+// 66 aplica solo a estas?
+rule "ActividadesNormales"
+     when
+       $s : Study(code == "881234.5" || code == "896100")
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addPatientIndication(new Indication("dieta", "Puede reanudar su dieta y continuar con sus actividades tal y como los realizaba antes de la prueba, a menos que el medico le indique lo contrario"));	   
+end
+
+// 67
+rule "AyunoCardio"
+     when
+       $s : Study(code == "881234.5" || code == "894102")
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addPatientIndication(new Indication("ayuno", "Debe venir con 4 horas de ayuno"));	   
+end
+
+// 69
+rule "Cafeina"
+     when
+       $s : Study(code == "881234.5")
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addPatientIndication(new Indication("cafeina", "Suspender el consumo de cafeina y cigarrillo dentro de cuatro horas antes del procedimiento"));	   
+end
+
+// 70 Ayuno de 6 horas ... repetitivo?
+// 71
+rule "TransesofagicoHospitalizado"
+     when
+       $p : Patient(hospitalized) 
+       $s : Study(code == "881235")
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addPatientIndication(new Indication("dieta", "No debe ingerir ningun alimento despues de 2 horas de terminado el procedimiento"));	
+	      
+end
+
+// 72
+rule "AcompananteCardio"
+     when
+       $s : Study(code == "881235" || code == "884103")
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addPatientIndication(new Indication("acompanante", "Debe asistir al examen con un acompanante"));	   
+end
+
+// 73
+rule "PruebaEsfuerzo"
+     when
+       $s : Study(code == "894102")
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addPatientIndication(new Indication("ayuno", "Debe venir con 4 horas de ayuno"));	   
+	   $o.addPatientIndication(new Indication("ropa", "Debe usar ropa deportiva y zapatos comodos (tennis)"));	
+end
+
+// 74, 75
+rule "PrepMonitoreosCardio"
+     when
+       $s : Study(code == "895001" || code == "896100")
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addPatientIndication(new Indication("bano", "Banese o duchese antes de que empiece el examen. No podra hacerlo mientras use el monitor o brazalete"));	   
+	   $o.addPatientIndication(new Indication("manta", "No duerma con una frazada (manta) electrica mientras tenga puesto el monitor"));	   
+end
+
+// 76 Sobra?
+// 77
+rule "TiltTest"
+     when
+       $s : Study(code == "884103")
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addPatientIndication(new Indication("dieta", "La ultima ingesta de alimentos liviana, con ropa comoda y sin maquillaje en cara y las unas"));	   
+end
+
+// 79, 80
+rule "TACAbdomen_P"
+     when
+       $s : Study(modality=="CT" && bodypart == "Abdomen")
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addPatientIndication(new Indication("dieta", "Dieta blanda desde la noche anterior al examen.(no grasa, no frijol, no jugo de mora, no chocolate)"));	   
+end         
+
+// 81, 82
+rule "UroTAC"
+     when
+       $s : Study(code == "884103")
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addPatientIndication(new Indication("dieta", "Debe tener vejiga llena (trate de tomar 1.5 litros de agua 1 hora antes del examen)"));	  
+	   $o.addPatientIndication(new Indication("patient", "No debe orinar (la vejiga debe estar llena)"));	  	    
+end
+
+// 82, 83  AngioTAC Coronarias
+rule "AngioTACCoronarias_P"
+     when
+       $s : Study(code == "879301.6")
+       $o : IndicationsOutput()     
+	  then
+	   System.out.println("Rule matched:" + drools.getRule().getName());
+	   $o.addPatientIndication(new Indication("dieta", "No debe consumir bebidas colas, cigarillo, chocolate y cafe desde el dia anterior al examen"));	   	    
+end
